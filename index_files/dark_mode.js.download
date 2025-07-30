@@ -1,0 +1,100 @@
+(function ($, Drupal, once) {
+  "use strict";
+
+  // Dark mode integration with Dark reader library.
+  Drupal.behaviors.dark_mode_switch_dark_reader = {
+    attach: function (context) {
+      let darkmodeCss = document.head.querySelector(".darkmode-css");
+      // Check if DarkReader is available.
+      if (typeof DarkReader !== "undefined") {
+        // Dark mode switch toggle.
+        $("#dark-mode-switch").change(function () {
+          let darkReaderEnabled = DarkReader.isEnabled();
+          let darkModeStatus = $(this).is(":checked");
+          if (darkModeStatus === false) {
+            DarkReader.disable();
+            $(this).attr("aria-checked", false);
+          } else {
+            $(this).attr("aria-checked", true);
+          }
+          updateDarkMode(darkReaderEnabled, darkModeStatus);
+          document.head.append(darkmodeCss);
+        });
+
+        $(once("dark-mode-keypress", ".custom-control-label")).on(
+          "keypress",
+          function (event) {
+            // Enter key press.
+            if (event.which === 13) {
+              let darkModeSwitch = $("#dark-mode-switch");
+              if (darkModeSwitch.is(":checked") === true) {
+                darkModeSwitch.prop("checked", false);
+                if ("theme" in localStorage) {
+                  localStorage.theme = false;
+                }
+                DarkReader.disable();
+              } else {
+                $("#dark-mode-switch").prop("checked", true);
+                let darkReaderEnabled = DarkReader.isEnabled();
+                let darkModeStatus = darkModeSwitch.is(":checked");
+
+                if (darkModeStatus === false) {
+                  DarkReader.disable();
+                } else {
+                  if ("theme" in localStorage) {
+                    localStorage.theme = true;
+                  }
+                }
+                updateDarkMode(darkReaderEnabled, darkModeStatus);
+                document.head.append(darkmodeCss);
+              }
+            }
+          },
+        );
+      }
+    },
+  };
+})(jQuery, Drupal, once);
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadDarkMode();
+});
+
+function loadDarkMode() {
+  if (typeof DarkReader !== "undefined") {
+    let darkReaderEnabled = DarkReader.isEnabled();
+    let darkModeStatus = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    if ("theme" in localStorage) {
+      darkModeStatus = localStorage.theme === "false" ? false : true;
+    }
+    if (darkReaderEnabled === true) {
+      document
+        .querySelector("#dark-mode-switch")
+        .setAttribute("aria-checked", true);
+    }
+    updateDarkMode(darkReaderEnabled, darkModeStatus);
+  }
+}
+
+loadDarkMode();
+
+function updateDarkMode(darkReaderEnabled, darkModeStatus) {
+  if (darkReaderEnabled === false && darkModeStatus === true) {
+    // Enable dark mode.
+    DarkReader.setFetchMethod((url) => {
+      let headers = new Headers();
+      headers.append("Access-Control-Allow-Origin", "*");
+
+      return window.fetch(url, {
+        headers,
+      });
+    });
+    DarkReader.enable({
+      brightness: 100,
+      contrast: 90,
+      sepia: 10,
+    });
+  }
+}

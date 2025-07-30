@@ -1,0 +1,1497 @@
+import {
+  __export
+} from "./chunk-MKBO26DX.js";
+
+// statics/js/tabia/logger.js
+var severityEnum = {
+  DEBUG: 7,
+  NOTICE: 5,
+  WARNING: 4,
+  ERROR: 3
+};
+var settings = {
+  logLevel: window.sfdcBase?.exp?.tabia?.logLevel || severityEnum.DEBUG,
+  logDebug: false
+};
+var severityLabelMap = {
+  7: "debug",
+  5: "notice",
+  4: "warning",
+  3: "error"
+};
+var severityConsoleMap = {
+  7: "debug",
+  5: "info",
+  4: "warn",
+  3: "error"
+};
+var defaultOptions = {
+  type: "unknown",
+  severity: severityEnum.NOTICE,
+  data: {}
+};
+function log(message, options = {}) {
+  const {
+    type = defaultOptions.type,
+    severity = defaultOptions.severity,
+    data = defaultOptions.data
+  } = options;
+  const level = severityLabelMap[severity];
+  if (severity > settings.logLevel) {
+    return;
+  }
+  console?.[severityConsoleMap[severity]](message, { type, data, level });
+}
+function debug(message, options = {}) {
+  options.severity = severityEnum.DEBUG;
+  log(message, options);
+}
+function notice(message, options = {}) {
+  options.severity = severityEnum.NOTICE;
+  log(message, options);
+}
+function warning(message, options = {}) {
+  options.severity = severityEnum.WARNING;
+  log(message, options);
+}
+function error(message, options = {}) {
+  options.severity = severityEnum.ERROR;
+  log(message, options);
+  const {
+    type = defaultOptions.type,
+    data
+  } = options;
+  throw new Error(message, { cause: { type, data } });
+}
+
+// statics/js/tabia/fetch.js
+var cache = /* @__PURE__ */ new Map();
+function createCacheKey(url, fetchOptions = {}) {
+  const fetchOptionsString = JSON.stringify(fetchOptions);
+  return `${url}:${fetchOptionsString}`;
+}
+async function tabiaFetch(url, options = {}) {
+  const {
+    label = url,
+    cacheBust = false,
+    fetchOptions = {}
+  } = options;
+  const cacheKey = createCacheKey(url, options.fetchOptions);
+  if (cacheBust) {
+    cache.delete(cacheKey);
+  }
+  if (cache.has(cacheKey)) {
+    debug(`Fetching (from cache): ${label}`, { type: "tabiaFetch", data: { url } });
+    return cache.get(cacheKey);
+  }
+  let data = null;
+  try {
+    debug(`Fetching: ${label}`, { type: "tabiaFetch", data: { url } });
+    const response = await globalThis.fetch(url, fetchOptions);
+    if (!response.ok) {
+      throw new Error(`${response.status} status code`);
+    }
+    data = await response.json();
+    if (!fetchOptions.method || fetchOptions.method === "GET") {
+      cache.set(cacheKey, data);
+    }
+  } catch (e) {
+    error("Unexpected fetch error.", { type: "tabiaFetch", data: { url, cause: e.message } });
+  }
+  return data;
+}
+async function clearFetchCaches() {
+  cache.clear();
+}
+
+// statics/js/tabia/geolocation.js
+var settings2 = {
+  apiBaseUrl: window.sfdcBase?.exp?.geolocation?.apiBaseUrl || "https://d1kxh80lfcue17.cloudfront.net/"
+};
+function processGeolocation(geolocation) {
+  const urlParams = new URL(window.location).searchParams;
+  const countryCodeOverride = urlParams.get("countryCode");
+  if (countryCodeOverride) {
+    geolocation.countryCode = countryCodeOverride;
+  }
+  return geolocation;
+}
+function getGeolocationApiUrl() {
+  return settings2.apiBaseUrl;
+}
+async function fetchGeolocation() {
+  const geolocation = await tabiaFetch(getGeolocationApiUrl(), { label: "Tableau Geolocation (CloudFront)" });
+  if (!geolocation.countryCode) {
+    error("Invalid geolocation response detected.", { type: "geolocation" });
+  }
+  return processGeolocation(geolocation);
+}
+function clearGeolocationCache() {
+  clearFetchCaches();
+}
+
+// statics/js/tabia/storage.js
+var storage_exports = {};
+__export(storage_exports, {
+  flush: () => flush,
+  get: () => get,
+  getGroup: () => getGroup,
+  index: () => index,
+  remove: () => remove,
+  set: () => set
+});
+
+// ../../node_modules/jstorage/jstorage.js
+(function() {
+  "use strict";
+  var JSTORAGE_VERSION = "0.4.12", $ = window.jQuery || window.$ || (window.$ = {}), JSON2 = {
+    parse: window.JSON && (window.JSON.parse || window.JSON.decode) || String.prototype.evalJSON && function(str) {
+      return String(str).evalJSON();
+    } || $.parseJSON || $.evalJSON,
+    stringify: Object.toJSON || window.JSON && (window.JSON.stringify || window.JSON.encode) || $.toJSON
+  };
+  if (typeof JSON2.parse !== "function" || typeof JSON2.stringify !== "function") {
+    throw new Error("No JSON support found, include //cdnjs.cloudflare.com/ajax/libs/json2/20110223/json2.js to page");
+  }
+  var _storage = {
+    __jstorage_meta: {
+      CRC32: {}
+    }
+  }, _storage_service = {
+    jStorage: "{}"
+  }, _storage_elm = null, _storage_size = 0, _backend = false, _observers = {}, _observer_timeout = false, _observer_update = 0, _pubsub_observers = {}, _pubsub_last = +/* @__PURE__ */ new Date(), _ttl_timeout, _XMLService = {
+    /**
+     * Validates a XML node to be XML
+     * based on jQuery.isXML function
+     */
+    isXML: function(elm) {
+      var documentElement = (elm ? elm.ownerDocument || elm : 0).documentElement;
+      return documentElement ? documentElement.nodeName !== "HTML" : false;
+    },
+    /**
+     * Encodes a XML node to string
+     * based on http://www.mercurytide.co.uk/news/article/issues-when-working-ajax/
+     */
+    encode: function(xmlNode) {
+      if (!this.isXML(xmlNode)) {
+        return false;
+      }
+      try {
+        return new XMLSerializer().serializeToString(xmlNode);
+      } catch (E1) {
+        try {
+          return xmlNode.xml;
+        } catch (E2) {
+        }
+      }
+      return false;
+    },
+    /**
+     * Decodes a XML node from string
+     * loosely based on http://outwestmedia.com/jquery-plugins/xmldom/
+     */
+    decode: function(xmlString) {
+      var dom_parser = "DOMParser" in window && new DOMParser().parseFromString || window.ActiveXObject && function(_xmlString) {
+        var xml_doc = new ActiveXObject("Microsoft.XMLDOM");
+        xml_doc.async = "false";
+        xml_doc.loadXML(_xmlString);
+        return xml_doc;
+      }, resultXML;
+      if (!dom_parser) {
+        return false;
+      }
+      resultXML = dom_parser.call("DOMParser" in window && new DOMParser() || window, xmlString, "text/xml");
+      return this.isXML(resultXML) ? resultXML : false;
+    }
+  };
+  function _init() {
+    var localStorageReallyWorks = false;
+    if ("localStorage" in window) {
+      try {
+        window.localStorage.setItem("_tmptest", "tmpval");
+        localStorageReallyWorks = true;
+        window.localStorage.removeItem("_tmptest");
+      } catch (BogusQuotaExceededErrorOnIos5) {
+      }
+    }
+    if (localStorageReallyWorks) {
+      try {
+        if (window.localStorage) {
+          _storage_service = window.localStorage;
+          _backend = "localStorage";
+          _observer_update = _storage_service.jStorage_update;
+        }
+      } catch (E3) {
+      }
+    } else if ("globalStorage" in window) {
+      try {
+        if (window.globalStorage) {
+          if (window.location.hostname == "localhost") {
+            _storage_service = window.globalStorage["localhost.localdomain"];
+          } else {
+            _storage_service = window.globalStorage[window.location.hostname];
+          }
+          _backend = "globalStorage";
+          _observer_update = _storage_service.jStorage_update;
+        }
+      } catch (E4) {
+      }
+    } else {
+      _storage_elm = document.createElement("link");
+      if (_storage_elm.addBehavior) {
+        _storage_elm.style.behavior = "url(#default#userData)";
+        document.getElementsByTagName("head")[0].appendChild(_storage_elm);
+        try {
+          _storage_elm.load("jStorage");
+        } catch (E) {
+          _storage_elm.setAttribute("jStorage", "{}");
+          _storage_elm.save("jStorage");
+          _storage_elm.load("jStorage");
+        }
+        var data = "{}";
+        try {
+          data = _storage_elm.getAttribute("jStorage");
+        } catch (E5) {
+        }
+        try {
+          _observer_update = _storage_elm.getAttribute("jStorage_update");
+        } catch (E6) {
+        }
+        _storage_service.jStorage = data;
+        _backend = "userDataBehavior";
+      } else {
+        _storage_elm = null;
+        return;
+      }
+    }
+    _load_storage();
+    _handleTTL();
+    _setupObserver();
+    _handlePubSub();
+    if ("addEventListener" in window) {
+      window.addEventListener("pageshow", function(event) {
+        if (event.persisted) {
+          _storageObserver();
+        }
+      }, false);
+    }
+  }
+  function _reloadData() {
+    var data = "{}";
+    if (_backend == "userDataBehavior") {
+      _storage_elm.load("jStorage");
+      try {
+        data = _storage_elm.getAttribute("jStorage");
+      } catch (E5) {
+      }
+      try {
+        _observer_update = _storage_elm.getAttribute("jStorage_update");
+      } catch (E6) {
+      }
+      _storage_service.jStorage = data;
+    }
+    _load_storage();
+    _handleTTL();
+    _handlePubSub();
+  }
+  function _setupObserver() {
+    if (_backend == "localStorage" || _backend == "globalStorage") {
+      if ("addEventListener" in window) {
+        window.addEventListener("storage", _storageObserver, false);
+      } else {
+        document.attachEvent("onstorage", _storageObserver);
+      }
+    } else if (_backend == "userDataBehavior") {
+      setInterval(_storageObserver, 1e3);
+    }
+  }
+  function _storageObserver() {
+    var updateTime;
+    clearTimeout(_observer_timeout);
+    _observer_timeout = setTimeout(function() {
+      if (_backend == "localStorage" || _backend == "globalStorage") {
+        updateTime = _storage_service.jStorage_update;
+      } else if (_backend == "userDataBehavior") {
+        _storage_elm.load("jStorage");
+        try {
+          updateTime = _storage_elm.getAttribute("jStorage_update");
+        } catch (E5) {
+        }
+      }
+      if (updateTime && updateTime != _observer_update) {
+        _observer_update = updateTime;
+        _checkUpdatedKeys();
+      }
+    }, 25);
+  }
+  function _checkUpdatedKeys() {
+    var oldCrc32List = JSON2.parse(JSON2.stringify(_storage.__jstorage_meta.CRC32)), newCrc32List;
+    _reloadData();
+    newCrc32List = JSON2.parse(JSON2.stringify(_storage.__jstorage_meta.CRC32));
+    var key, updated = [], removed = [];
+    for (key in oldCrc32List) {
+      if (oldCrc32List.hasOwnProperty(key)) {
+        if (!newCrc32List[key]) {
+          removed.push(key);
+          continue;
+        }
+        if (oldCrc32List[key] != newCrc32List[key] && String(oldCrc32List[key]).substr(0, 2) == "2.") {
+          updated.push(key);
+        }
+      }
+    }
+    for (key in newCrc32List) {
+      if (newCrc32List.hasOwnProperty(key)) {
+        if (!oldCrc32List[key]) {
+          updated.push(key);
+        }
+      }
+    }
+    _fireObservers(updated, "updated");
+    _fireObservers(removed, "deleted");
+  }
+  function _fireObservers(keys, action) {
+    keys = [].concat(keys || []);
+    var i, j, len, jlen;
+    if (action == "flushed") {
+      keys = [];
+      for (var key in _observers) {
+        if (_observers.hasOwnProperty(key)) {
+          keys.push(key);
+        }
+      }
+      action = "deleted";
+    }
+    for (i = 0, len = keys.length; i < len; i++) {
+      if (_observers[keys[i]]) {
+        for (j = 0, jlen = _observers[keys[i]].length; j < jlen; j++) {
+          _observers[keys[i]][j](keys[i], action);
+        }
+      }
+      if (_observers["*"]) {
+        for (j = 0, jlen = _observers["*"].length; j < jlen; j++) {
+          _observers["*"][j](keys[i], action);
+        }
+      }
+    }
+  }
+  function _publishChange() {
+    var updateTime = (+/* @__PURE__ */ new Date()).toString();
+    if (_backend == "localStorage" || _backend == "globalStorage") {
+      try {
+        _storage_service.jStorage_update = updateTime;
+      } catch (E8) {
+        _backend = false;
+      }
+    } else if (_backend == "userDataBehavior") {
+      _storage_elm.setAttribute("jStorage_update", updateTime);
+      _storage_elm.save("jStorage");
+    }
+    _storageObserver();
+  }
+  function _load_storage() {
+    if (_storage_service.jStorage) {
+      try {
+        _storage = JSON2.parse(String(_storage_service.jStorage));
+      } catch (E6) {
+        _storage_service.jStorage = "{}";
+      }
+    } else {
+      _storage_service.jStorage = "{}";
+    }
+    _storage_size = _storage_service.jStorage ? String(_storage_service.jStorage).length : 0;
+    if (!_storage.__jstorage_meta) {
+      _storage.__jstorage_meta = {};
+    }
+    if (!_storage.__jstorage_meta.CRC32) {
+      _storage.__jstorage_meta.CRC32 = {};
+    }
+  }
+  function _save() {
+    _dropOldEvents();
+    try {
+      _storage_service.jStorage = JSON2.stringify(_storage);
+      if (_storage_elm) {
+        _storage_elm.setAttribute("jStorage", _storage_service.jStorage);
+        _storage_elm.save("jStorage");
+      }
+      _storage_size = _storage_service.jStorage ? String(_storage_service.jStorage).length : 0;
+    } catch (E7) {
+    }
+  }
+  function _checkKey(key) {
+    if (typeof key != "string" && typeof key != "number") {
+      throw new TypeError("Key name must be string or numeric");
+    }
+    if (key == "__jstorage_meta") {
+      throw new TypeError("Reserved key name");
+    }
+    return true;
+  }
+  function _handleTTL() {
+    var curtime, i, TTL, CRC32, nextExpire = Infinity, changed = false, deleted = [];
+    clearTimeout(_ttl_timeout);
+    if (!_storage.__jstorage_meta || typeof _storage.__jstorage_meta.TTL != "object") {
+      return;
+    }
+    curtime = +/* @__PURE__ */ new Date();
+    TTL = _storage.__jstorage_meta.TTL;
+    CRC32 = _storage.__jstorage_meta.CRC32;
+    for (i in TTL) {
+      if (TTL.hasOwnProperty(i)) {
+        if (TTL[i] <= curtime) {
+          delete TTL[i];
+          delete CRC32[i];
+          delete _storage[i];
+          changed = true;
+          deleted.push(i);
+        } else if (TTL[i] < nextExpire) {
+          nextExpire = TTL[i];
+        }
+      }
+    }
+    if (nextExpire != Infinity) {
+      _ttl_timeout = setTimeout(_handleTTL, Math.min(nextExpire - curtime, 2147483647));
+    }
+    if (changed) {
+      _save();
+      _publishChange();
+      _fireObservers(deleted, "deleted");
+    }
+  }
+  function _handlePubSub() {
+    var i, len;
+    if (!_storage.__jstorage_meta.PubSub) {
+      return;
+    }
+    var pubelm, _pubsubCurrent = _pubsub_last, needFired = [];
+    for (i = len = _storage.__jstorage_meta.PubSub.length - 1; i >= 0; i--) {
+      pubelm = _storage.__jstorage_meta.PubSub[i];
+      if (pubelm[0] > _pubsub_last) {
+        _pubsubCurrent = pubelm[0];
+        needFired.unshift(pubelm);
+      }
+    }
+    for (i = needFired.length - 1; i >= 0; i--) {
+      _fireSubscribers(needFired[i][1], needFired[i][2]);
+    }
+    _pubsub_last = _pubsubCurrent;
+  }
+  function _fireSubscribers(channel, payload) {
+    if (_pubsub_observers[channel]) {
+      for (var i = 0, len = _pubsub_observers[channel].length; i < len; i++) {
+        try {
+          _pubsub_observers[channel][i](channel, JSON2.parse(JSON2.stringify(payload)));
+        } catch (E) {
+        }
+      }
+    }
+  }
+  function _dropOldEvents() {
+    if (!_storage.__jstorage_meta.PubSub) {
+      return;
+    }
+    var retire = +/* @__PURE__ */ new Date() - 2e3;
+    for (var i = 0, len = _storage.__jstorage_meta.PubSub.length; i < len; i++) {
+      if (_storage.__jstorage_meta.PubSub[i][0] <= retire) {
+        _storage.__jstorage_meta.PubSub.splice(i, _storage.__jstorage_meta.PubSub.length - i);
+        break;
+      }
+    }
+    if (!_storage.__jstorage_meta.PubSub.length) {
+      delete _storage.__jstorage_meta.PubSub;
+    }
+  }
+  function _publish(channel, payload) {
+    if (!_storage.__jstorage_meta) {
+      _storage.__jstorage_meta = {};
+    }
+    if (!_storage.__jstorage_meta.PubSub) {
+      _storage.__jstorage_meta.PubSub = [];
+    }
+    _storage.__jstorage_meta.PubSub.unshift([+/* @__PURE__ */ new Date(), channel, payload]);
+    _save();
+    _publishChange();
+  }
+  function murmurhash2_32_gc(str, seed) {
+    var l = str.length, h = seed ^ l, i = 0, k;
+    while (l >= 4) {
+      k = str.charCodeAt(i) & 255 | (str.charCodeAt(++i) & 255) << 8 | (str.charCodeAt(++i) & 255) << 16 | (str.charCodeAt(++i) & 255) << 24;
+      k = (k & 65535) * 1540483477 + (((k >>> 16) * 1540483477 & 65535) << 16);
+      k ^= k >>> 24;
+      k = (k & 65535) * 1540483477 + (((k >>> 16) * 1540483477 & 65535) << 16);
+      h = (h & 65535) * 1540483477 + (((h >>> 16) * 1540483477 & 65535) << 16) ^ k;
+      l -= 4;
+      ++i;
+    }
+    switch (l) {
+      case 3:
+        h ^= (str.charCodeAt(i + 2) & 255) << 16;
+      /* falls through */
+      case 2:
+        h ^= (str.charCodeAt(i + 1) & 255) << 8;
+      /* falls through */
+      case 1:
+        h ^= str.charCodeAt(i) & 255;
+        h = (h & 65535) * 1540483477 + (((h >>> 16) * 1540483477 & 65535) << 16);
+    }
+    h ^= h >>> 13;
+    h = (h & 65535) * 1540483477 + (((h >>> 16) * 1540483477 & 65535) << 16);
+    h ^= h >>> 15;
+    return h >>> 0;
+  }
+  $.jStorage = {
+    /* Version number */
+    version: JSTORAGE_VERSION,
+    /**
+     * Sets a key's value.
+     *
+     * @param {String} key Key to set. If this value is not set or not
+     *              a string an exception is raised.
+     * @param {Mixed} value Value to set. This can be any value that is JSON
+     *              compatible (Numbers, Strings, Objects etc.).
+     * @param {Object} [options] - possible options to use
+     * @param {Number} [options.TTL] - optional TTL value, in milliseconds
+     * @return {Mixed} the used value
+     */
+    set: function(key, value, options) {
+      _checkKey(key);
+      options = options || {};
+      if (typeof value == "undefined") {
+        this.deleteKey(key);
+        return value;
+      }
+      if (_XMLService.isXML(value)) {
+        value = {
+          _is_xml: true,
+          xml: _XMLService.encode(value)
+        };
+      } else if (typeof value == "function") {
+        return void 0;
+      } else if (value && typeof value == "object") {
+        value = JSON2.parse(JSON2.stringify(value));
+      }
+      _storage[key] = value;
+      _storage.__jstorage_meta.CRC32[key] = "2." + murmurhash2_32_gc(JSON2.stringify(value), 2538058380);
+      this.setTTL(key, options.TTL || 0);
+      _fireObservers(key, "updated");
+      return value;
+    },
+    /**
+     * Looks up a key in cache
+     *
+     * @param {String} key - Key to look up.
+     * @param {mixed} def - Default value to return, if key didn't exist.
+     * @return {Mixed} the key value, default value or null
+     */
+    get: function(key, def) {
+      _checkKey(key);
+      if (key in _storage) {
+        if (_storage[key] && typeof _storage[key] == "object" && _storage[key]._is_xml) {
+          return _XMLService.decode(_storage[key].xml);
+        } else {
+          return _storage[key];
+        }
+      }
+      return typeof def == "undefined" ? null : def;
+    },
+    /**
+     * Deletes a key from cache.
+     *
+     * @param {String} key - Key to delete.
+     * @return {Boolean} true if key existed or false if it didn't
+     */
+    deleteKey: function(key) {
+      _checkKey(key);
+      if (key in _storage) {
+        delete _storage[key];
+        if (typeof _storage.__jstorage_meta.TTL == "object" && key in _storage.__jstorage_meta.TTL) {
+          delete _storage.__jstorage_meta.TTL[key];
+        }
+        delete _storage.__jstorage_meta.CRC32[key];
+        _save();
+        _publishChange();
+        _fireObservers(key, "deleted");
+        return true;
+      }
+      return false;
+    },
+    /**
+     * Sets a TTL for a key, or remove it if ttl value is 0 or below
+     *
+     * @param {String} key - key to set the TTL for
+     * @param {Number} ttl - TTL timeout in milliseconds
+     * @return {Boolean} true if key existed or false if it didn't
+     */
+    setTTL: function(key, ttl) {
+      var curtime = +/* @__PURE__ */ new Date();
+      _checkKey(key);
+      ttl = Number(ttl) || 0;
+      if (key in _storage) {
+        if (!_storage.__jstorage_meta.TTL) {
+          _storage.__jstorage_meta.TTL = {};
+        }
+        if (ttl > 0) {
+          _storage.__jstorage_meta.TTL[key] = curtime + ttl;
+        } else {
+          delete _storage.__jstorage_meta.TTL[key];
+        }
+        _save();
+        _handleTTL();
+        _publishChange();
+        return true;
+      }
+      return false;
+    },
+    /**
+     * Gets remaining TTL (in milliseconds) for a key or 0 when no TTL has been set
+     *
+     * @param {String} key Key to check
+     * @return {Number} Remaining TTL in milliseconds
+     */
+    getTTL: function(key) {
+      var curtime = +/* @__PURE__ */ new Date(), ttl;
+      _checkKey(key);
+      if (key in _storage && _storage.__jstorage_meta.TTL && _storage.__jstorage_meta.TTL[key]) {
+        ttl = _storage.__jstorage_meta.TTL[key] - curtime;
+        return ttl || 0;
+      }
+      return 0;
+    },
+    /**
+     * Deletes everything in cache.
+     *
+     * @return {Boolean} Always true
+     */
+    flush: function() {
+      _storage = {
+        __jstorage_meta: {
+          CRC32: {}
+        }
+      };
+      _save();
+      _publishChange();
+      _fireObservers(null, "flushed");
+      return true;
+    },
+    /**
+     * Returns a read-only copy of _storage
+     *
+     * @return {Object} Read-only copy of _storage
+     */
+    storageObj: function() {
+      function F() {
+      }
+      F.prototype = _storage;
+      return new F();
+    },
+    /**
+     * Returns an index of all used keys as an array
+     * ['key1', 'key2',..'keyN']
+     *
+     * @return {Array} Used keys
+     */
+    index: function() {
+      var index2 = [], i;
+      for (i in _storage) {
+        if (_storage.hasOwnProperty(i) && i != "__jstorage_meta") {
+          index2.push(i);
+        }
+      }
+      return index2;
+    },
+    /**
+     * How much space in bytes does the storage take?
+     *
+     * @return {Number} Storage size in chars (not the same as in bytes,
+     *                  since some chars may take several bytes)
+     */
+    storageSize: function() {
+      return _storage_size;
+    },
+    /**
+     * Which backend is currently in use?
+     *
+     * @return {String} Backend name
+     */
+    currentBackend: function() {
+      return _backend;
+    },
+    /**
+     * Test if storage is available
+     *
+     * @return {Boolean} True if storage can be used
+     */
+    storageAvailable: function() {
+      return !!_backend;
+    },
+    /**
+     * Register change listeners
+     *
+     * @param {String} key Key name
+     * @param {Function} callback Function to run when the key changes
+     */
+    listenKeyChange: function(key, callback) {
+      _checkKey(key);
+      if (!_observers[key]) {
+        _observers[key] = [];
+      }
+      _observers[key].push(callback);
+    },
+    /**
+     * Remove change listeners
+     *
+     * @param {String} key Key name to unregister listeners against
+     * @param {Function} [callback] If set, unregister the callback, if not - unregister all
+     */
+    stopListening: function(key, callback) {
+      _checkKey(key);
+      if (!_observers[key]) {
+        return;
+      }
+      if (!callback) {
+        delete _observers[key];
+        return;
+      }
+      for (var i = _observers[key].length - 1; i >= 0; i--) {
+        if (_observers[key][i] == callback) {
+          _observers[key].splice(i, 1);
+        }
+      }
+    },
+    /**
+     * Subscribe to a Publish/Subscribe event stream
+     *
+     * @param {String} channel Channel name
+     * @param {Function} callback Function to run when the something is published to the channel
+     */
+    subscribe: function(channel, callback) {
+      channel = (channel || "").toString();
+      if (!channel) {
+        throw new TypeError("Channel not defined");
+      }
+      if (!_pubsub_observers[channel]) {
+        _pubsub_observers[channel] = [];
+      }
+      _pubsub_observers[channel].push(callback);
+    },
+    /**
+     * Publish data to an event stream
+     *
+     * @param {String} channel Channel name
+     * @param {Mixed} payload Payload to deliver
+     */
+    publish: function(channel, payload) {
+      channel = (channel || "").toString();
+      if (!channel) {
+        throw new TypeError("Channel not defined");
+      }
+      _publish(channel, payload);
+    },
+    /**
+     * Reloads the data from browser storage
+     */
+    reInit: function() {
+      _reloadData();
+    },
+    /**
+     * Removes reference from global objects and saves it as jStorage
+     *
+     * @param {Boolean} option if needed to save object as simple 'jStorage' in windows context
+     */
+    noConflict: function(saveInGlobal) {
+      delete window.$.jStorage;
+      if (saveInGlobal) {
+        window.jStorage = this;
+      }
+      return this;
+    }
+  };
+  _init();
+})();
+
+// statics/js/tabia/storage.js
+var jStorage = window.$.jStorage;
+var settings3 = {
+  ttl: 0
+};
+function set(id, value, ttl = settings3.ttl) {
+  return jStorage.set(id, value, { TTL: ttl });
+}
+function get(id) {
+  return jStorage.get(id) || null;
+}
+function remove(id) {
+  return jStorage.deleteKey(id);
+}
+function index() {
+  return jStorage.index();
+}
+function flush() {
+  return jStorage.flush();
+}
+function getGroup(group) {
+  const data = {};
+  let propertyName;
+  index().forEach((id) => {
+    if (typeof id === "string" && id.indexOf(`${group}.`) === 0) {
+      propertyName = id.replace(`${group}.`, "");
+      data[propertyName] = get(id);
+    }
+  });
+  return data;
+}
+
+// statics/js/tabia/strings.js
+var strings_exports = {};
+__export(strings_exports, {
+  trimLeadingSlashes: () => trimLeadingSlashes,
+  trimSlashes: () => trimSlashes,
+  trimTrailingSlashes: () => trimTrailingSlashes
+});
+function trimSlashes(input, options = {}) {
+  const {
+    leading = true,
+    trailing = true
+  } = options;
+  let result = input;
+  if (leading) {
+    result = result.replace(/^\/+/, "");
+  }
+  if (trailing) {
+    result = result.replace(/\/+$/, "");
+  }
+  return result;
+}
+function trimLeadingSlashes(input) {
+  return trimSlashes(input, { leading: true, trailing: false });
+}
+function trimTrailingSlashes(input) {
+  return trimSlashes(input, { leading: false, trailing: true });
+}
+
+// statics/js/tabia/index.js
+var Tabia = {
+  logger: {
+    debug,
+    notice,
+    warning,
+    error,
+    log
+  },
+  storage: storage_exports,
+  http: {
+    fetch: tabiaFetch,
+    clearFetchCaches
+  },
+  geolocation: {
+    fetchGeolocation,
+    clearGeolocationCache
+  },
+  strings: strings_exports
+};
+window.Tabia ?? (window.Tabia = Tabia);
+
+// statics/js/analytics.js
+var analytics_exports = {};
+__export(analytics_exports, {
+  default: () => initialize
+});
+var {
+  templateName,
+  templateId,
+  taxonomy,
+  experiment
+} = window.TableauExperience;
+function initialize() {
+  window.document.dispatchEvent(
+    new CustomEvent("www_track", {
+      detail: getDataLayerPageLoadProps()
+    })
+  );
+  document.addEventListener("click", (jsEvent) => {
+    const target = jsEvent.target.closest("a, [data-click-event-element-name]");
+    if (!target) return;
+    jsEvent.stopPropagation();
+    const clickActivityType = getClickActivityType(jsEvent);
+    if (!clickActivityType) return;
+    let eventDetail = {};
+    switch (clickActivityType) {
+      case "navigation_click__logo":
+      case "navigation_click__header":
+      case "navigation_click__footer":
+      case "navigation_click__social":
+        eventDetail = getDataLayerNavLinkEventProps(jsEvent);
+        break;
+      default:
+        return;
+    }
+    if (Object.keys(eventDetail).length) {
+      window.document.dispatchEvent(
+        new CustomEvent("www_track", { detail: eventDetail })
+      );
+    }
+  });
+}
+function getDataLayerPageLoadProps() {
+  return {
+    event: "custEv_pageDataAvailable",
+    templateName,
+    templateId,
+    taxonomy,
+    experiment
+  };
+}
+function getDataLayerNavLinkEventProps(jsEvent) {
+  const target = jsEvent.target.closest("a, [data-click-event-element-name]");
+  if (!target) return {};
+  const href = target.href;
+  const cleanUrl = href.split(/[?#]/)[0];
+  const linkText = getLinkText(jsEvent);
+  const isSocialLink = jsEvent.target.closest('[data-name="social-interact"]');
+  const socialLinkType = isSocialLink ? getSocialLinkType(jsEvent.target) : "";
+  const navLinkType = getNavLinkType(jsEvent);
+  const isFooterLogo = jsEvent.target.closest(".global-footer-helmet__logo");
+  const colonDelimitedBreadcrumbsGa4 = getColonDelimitedBreadcrumbs(jsEvent);
+  const navItemLevel = getNavItemLevel(jsEvent.target);
+  const ga4DataLayerObj = {
+    event: "custEv_navigationClick",
+    clickText: linkText,
+    clickURL: cleanUrl
+  };
+  if (isSocialLink) {
+    ga4DataLayerObj.navLevel = "social";
+    ga4DataLayerObj.navItem = `social:${socialLinkType}`;
+    ga4DataLayerObj.navType = "footer";
+  } else if (navLinkType === "logo") {
+    ga4DataLayerObj.navLevel = "logo";
+    ga4DataLayerObj.navItem = "home:logo";
+    ga4DataLayerObj.navType = "logo";
+  } else if (navLinkType === "header" || navLinkType === "footer") {
+    ga4DataLayerObj.navLevel = navItemLevel;
+    ga4DataLayerObj.navItem = isFooterLogo ? "footer logo" : colonDelimitedBreadcrumbsGa4;
+    ga4DataLayerObj.navType = navLinkType;
+  }
+  return ga4DataLayerObj;
+}
+function getLinkText(jsEvent) {
+  const target = jsEvent.target;
+  const clickedElement = target.closest("a, [data-click-event-element-name]");
+  if (target.classList.contains("my-account-name")) {
+    return "Name Surname";
+  }
+  if (clickedElement?.getAttribute("data-name") === "social-interact") {
+    return "";
+  }
+  return clickedElement?.getAttribute("data-value") || clickedElement?.text?.trim() || target.innerText?.trim() || "";
+}
+function getClickActivityType(jsEvent) {
+  const target = jsEvent.target;
+  if (target.closest('[data-name="social-interact"]')) return "navigation_click__social";
+  const navLinkType = getNavLinkType(jsEvent);
+  return navLinkType ? `navigation_click__${navLinkType}` : "";
+}
+function getNavLinkType(jsEvent) {
+  const target = jsEvent.target;
+  if (target.closest(".site-logo.logo-img")) return "logo";
+  if (target.closest("#header")) return "header";
+  if (target.closest("#footer")) return "footer";
+  return "";
+}
+function getNavItemLevel(element) {
+  if (element.closest(".primary-nav__menu-item--level-3")) return "l3";
+  if (element.closest(".primary-nav__menu-item--level-2")) return "l2";
+  if (element.closest(".primary-nav__menu-item--level-1")) return "l1";
+  if (element.closest("#tableau-menu-secondary-nav")) return "l1";
+  if (element.closest('[data-menu-name="footer"]')) return "l1";
+  if (element.closest('[data-menu-name="footer-secondary"]')) return "l1";
+  if (element.closest("#block-tableau-language-switcher")) return "l1";
+  if (element.closest('[data-menu-name="global-footer-helmet"]')) return "vertical_list";
+  return "";
+}
+function getColonDelimitedBreadcrumbs(jsEvent) {
+  const target = jsEvent.target;
+  if (target.classList.contains("my-account-name")) {
+    return "name surname";
+  }
+  const parentLi = target.closest("li");
+  if (!parentLi) return "";
+  const ancestors = [];
+  let current = parentLi;
+  while (current) {
+    if (current.tagName === "LI") {
+      ancestors.unshift(current);
+    }
+    current = current.parentElement;
+  }
+  return ancestors.map((item) => {
+    const link = item.querySelector("a");
+    if (!link) return "";
+    const dataValue = link.getAttribute("data-value");
+    const linkText = link.textContent;
+    const itemText = dataValue || linkText;
+    return itemText ? itemText.trim().toLowerCase() : "";
+  }).filter(Boolean).join(":");
+}
+function getSocialLinkType(element) {
+  return element.closest("a")?.getAttribute("data-location") || "";
+}
+
+// statics/js/menu.js
+var menu_exports = {};
+__export(menu_exports, {
+  default: () => initialize2
+});
+function fixLanguageSelectorLinks() {
+  const canonicalUrl = document.querySelector('link[rel="canonical"]')?.href;
+  if (typeof canonicalUrl !== "string") {
+    error("Invalid/missing canonical meta tag -- required to build correct language switcher links.", { type: "menu" });
+  }
+  const canonicalUrlPath = new URL(canonicalUrl).pathname;
+  debug("Detected canonical URL path.", { type: "menu", data: { canonicalUrlPath } });
+  const envPrefixUrlPath = trimTrailingSlashes(window.location.pathname.replace(trimTrailingSlashes(canonicalUrlPath), ""));
+  debug("Detected environment path prefix.", { type: "menu", data: { envPrefixUrlPath } });
+  const languageSwitcherLinkElements = document.querySelectorAll(".global-footer__language__options a");
+  languageSwitcherLinkElements.forEach((linkElement) => {
+    const linkLanguagePrefix = linkElement.dataset.languagePrefix ? `/${linkElement.dataset.languagePrefix}` : "";
+    const prefixlessPath = canonicalUrlPath.replace(`/${window.sfdcBase.locale}`, "");
+    const trimmedPath = trimLeadingSlashes(prefixlessPath);
+    linkElement.href = `${envPrefixUrlPath}${linkLanguagePrefix}/${trimmedPath}`;
+  });
+}
+function getActiveTrail() {
+  const menuLinks = Array.from(document.querySelectorAll('[data-menu-name="main"] a'));
+  const menuRules = window.TableauExperience.menuRules;
+  let currentPath = window.location.pathname;
+  currentPath = currentPath.replace(/^\/[a-z]{2}-[a-z]{2}/, "");
+  const menuLink = findMenuLinkByPath(menuLinks, currentPath);
+  if (menuLink) {
+    return menuLink;
+  }
+  if (menuRules) {
+    const matchedRule = menuRules.find((rule) => {
+      const pathPatterns = rule?.conditions?.path_patterns;
+      if (pathPatterns) {
+        return pathPatterns.some((pattern) => {
+          const regex = new RegExp(pattern.replace(/\*/g, "[^ ]*"), "g");
+          return currentPath.match(regex)?.length > 0;
+        });
+      }
+      return false;
+    });
+    if (matchedRule) {
+      return findMenuLinkByPath(menuLinks, `${matchedRule.menu_link}`);
+    }
+  }
+  return null;
+}
+function findMenuLinkByPath(links, path) {
+  return links.find((link) => {
+    if (path === "/" && !link.href.includes(window.location.hostname)) {
+      return false;
+    }
+    const linkPath = new URL(link.href).pathname.replace(/^\/[a-z]{2}-[a-z]{2}/, "");
+    return linkPath === path;
+  });
+}
+function setActiveTrail(menuLink) {
+  if (!(menuLink instanceof HTMLElement)) {
+    return;
+  }
+  menuLink.classList.add("active");
+  let menuParentLi = menuLink.closest("li");
+  while (menuParentLi && menuParentLi.closest('[data-menu-name="main"]')) {
+    const linkInParent = menuParentLi.querySelector("a");
+    if (linkInParent && linkInParent !== menuLink) {
+      linkInParent.classList.add("active");
+    }
+    const parentElement = menuParentLi.parentElement;
+    menuParentLi = parentElement ? parentElement.closest("li") : null;
+  }
+}
+function initialize2() {
+  document.dispatchEvent(new CustomEvent("tabAjaxMenu:ready", { bubbles: true, cancelable: true }));
+  fixLanguageSelectorLinks();
+  const menuLink = getActiveTrail();
+  if (menuLink) {
+    setActiveTrail(menuLink);
+  }
+}
+
+// statics/js/personalization.js
+var personalization_exports = {};
+__export(personalization_exports, {
+  default: () => initialize3
+});
+var settings4 = {
+  personalizeCtasCountries: ["BR", "CN", "IN", "BY", "SD"]
+};
+var accountNameElement = document.querySelector(".my-account-name");
+var personalizedSecondaryNav = document.querySelector(".global-header__secondary-nav");
+var personalizedSecondaryNavCtas = document.querySelector(".global-header__secondary-menu-ctas");
+var countryPersonalizedCtas = document.querySelectorAll('[data-menu-personalize="show"]');
+var defaultPersonalizedCtas = document.querySelectorAll('[data-menu-personalize="hide"]');
+async function fetchProfile() {
+  return tabiaFetch("/api/profile", { label: "Drupal User Profile" });
+}
+function renderProfile(profile) {
+  document.body.dataset.userType = profile?.type;
+  if (profile.first_name && profile.last_name) {
+    if (accountNameElement) {
+      accountNameElement.innerText = `${profile.first_name} ${profile.last_name}`;
+    }
+  }
+}
+async function personalizeNavCtas(countryCode) {
+  if (settings4.personalizeCtasCountries.includes(countryCode)) {
+    countryPersonalizedCtas.forEach((cta) => cta.classList.remove("hidden"));
+    defaultPersonalizedCtas.forEach((cta) => cta.classList.add("hidden"));
+  } else {
+    countryPersonalizedCtas.forEach((cta) => cta.classList.add("hidden"));
+    defaultPersonalizedCtas.forEach((cta) => cta.classList.remove("hidden"));
+  }
+}
+async function initialize3() {
+  document.body.dataset.userType = "anonymous";
+  if (personalizedSecondaryNav) {
+    personalizedSecondaryNav.classList.add("visually-hidden");
+    personalizedSecondaryNav.classList.add("fadable", "fadable--faded-out");
+  }
+  const data = {
+    profile: {
+      type: "anonymous"
+    },
+    geolocation: {}
+  };
+  try {
+    [data.profile, data.geolocation] = await Promise.all([
+      fetchProfile(),
+      fetchGeolocation()
+    ]);
+  } catch {
+  }
+  debug("Loaded personalization data.", {
+    type: "personalization",
+    data
+  });
+  renderProfile(data.profile);
+  personalizeNavCtas(data.geolocation?.countryCode);
+  if (personalizedSecondaryNav) {
+    personalizedSecondaryNav.classList.remove("visually-hidden");
+    personalizedSecondaryNav.classList.add("fadable", "fadable--faded-in");
+  }
+  if (personalizedSecondaryNavCtas) {
+    personalizedSecondaryNavCtas.style.opacity = 1;
+  }
+}
+
+// statics/js/search.js
+var search_exports = {};
+__export(search_exports, {
+  default: () => setupSearch,
+  initializeGlobalSearch: () => initializeGlobalSearch,
+  state: () => state
+});
+
+// statics/js/tabia/proxy.js
+function makeReadOnlyProxyOf(obj) {
+  return new Proxy(obj, {
+    get: function(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      const isNull = value === null;
+      const isObject = typeof value === "object" && !isNull;
+      const isFunction = typeof value === "function";
+      const isPromise = isObject && typeof value.then === "function";
+      const isElement = isObject && value instanceof Element;
+      if (isNull) {
+        return value;
+      }
+      if (isElement || isPromise) {
+        return value;
+      }
+      if (isObject || isFunction) {
+        return makeReadOnlyProxyOf(value);
+      }
+      return Object.freeze(value);
+    },
+    set: function() {
+      throw new Error("proxy is read-only");
+    },
+    deleteProperty: function() {
+      throw new Error("proxy is read-only");
+    }
+  });
+}
+
+// statics/js/search.js
+var settings5 = {
+  organizationId: window.sfdcBase?.exp?.coveo?.organizationId || "org62salesforce",
+  searchPage: "/search",
+  searchTokenApi: "/api/coveo/searchtoken"
+};
+var globalSearch = {
+  isInitialized: false,
+  initializePromise: null,
+  loadedModules: {},
+  engine: null,
+  controller: null,
+  autocomplete: null,
+  previousIsLoadingSuggestions: null,
+  suggestionsPromise: null,
+  resolveSuggestions: null
+};
+var elements = {
+  container: document.querySelector('[data-selector="global-search"]'),
+  input: document.querySelector('[data-selector="global-search-input"]'),
+  closeButton: document.querySelector('[data-selector="global-search-close"]'),
+  resultList: document.querySelector('[data-selector="global-search-suggestions"]'),
+  triggers: document.querySelectorAll('.global-header__search-toggle, [data-search-trigger="coveo"]'),
+  globalHeader: document.querySelector(".global-header")
+};
+var searchState = {
+  globalSearch,
+  elements
+};
+async function fetchAccessToken() {
+  try {
+    const jsonData = await tabiaFetch(settings5.searchTokenApi, { cacheBust: true });
+    return jsonData.searchToken;
+  } catch (fetchError) {
+    error("Failed to fetch Coveo search token", { type: "search", error: fetchError });
+    return null;
+  }
+}
+function resetSearchUx() {
+  elements.input.value = "";
+  elements.closeButton.click();
+}
+function redirectToSearchPage(rawQuery) {
+  resetSearchUx();
+  const stateFragment = `#q=${encodeURIComponent(rawQuery)}`;
+  const { locale } = window.sfdcBase;
+  const prefix = locale !== "en-us" ? `/${locale}` : "";
+  window.location.href = `${prefix}${settings5.searchPage}${stateFragment}`;
+}
+async function initializeGlobalSearch() {
+  if (globalSearch.isInitialized) {
+    error("global search is already initialized", { type: "search" });
+  }
+  debug("initializing global search", { type: "search" });
+  if (Object.values(elements).some((element) => element === null)) {
+    error("Some global search elements are missing.", { type: "search" });
+  }
+  const autocompleteJs = await import("./autocomplete.esm-TAUDSD3X.js");
+  globalSearch.loadedModules.autocomplete = autocompleteJs;
+  const { default: Autocomplete } = autocompleteJs;
+  globalSearch.autocomplete = new Autocomplete(elements.container, {
+    search: async (input) => {
+      if (!input.trim().length) {
+        return [];
+      }
+      globalSearch.suggestionsPromise = new Promise((resolve) => {
+        globalSearch.resolveSuggestions = resolve;
+      });
+      globalSearch.controller?.updateText(input);
+      return await globalSearch.suggestionsPromise;
+    },
+    debounceTime: 200,
+    getResultValue: (result) => result.rawValue,
+    renderResult: (result, props) => {
+      const { highlightedValue } = result;
+      return `<li ${props}>${highlightedValue}</li>`;
+    },
+    autoSelect: false,
+    // Update the input value when a new suggestion is selected.
+    onUpdate: (results, selectedIndex) => {
+      const rawValue = results[selectedIndex]?.rawValue;
+      if (rawValue) {
+        elements.input.value = rawValue;
+      }
+    },
+    // Redirect to search results when a suggestion is clicked (or Enter pressed).
+    onSubmit: (result) => {
+      const { rawValue } = result;
+      if (rawValue) {
+        redirectToSearchPage(rawValue);
+      }
+    }
+  });
+  elements.input.addEventListener("keydown", (e) => {
+    const { value } = elements.input;
+    if (e.key === "Enter" && value) {
+      redirectToSearchPage(value);
+    }
+  });
+  const [accessToken, headless] = await Promise.all([
+    fetchAccessToken(),
+    import("./headless.esm-EXGW7TZV.js")
+  ]);
+  globalSearch.loadedModules.headless = headless;
+  globalSearch.engine = headless.buildSearchEngine({
+    configuration: {
+      organizationId: settings5.organizationId,
+      accessToken,
+      renewAccessToken: fetchAccessToken,
+      search: {
+        locale: window.sfdcBase.locale,
+        searchHub: "Tableau.comMain"
+      },
+      analytics: {
+        // Prefer `legacy` analytics mode (UA—Usage Analytics), as the `next` mode
+        // (EP—Event Protocol) is incompatible.
+        // "We recommend against migration to EP for non-Commerce implementations, since they aren’t
+        // supported yet."
+        // https://docs.coveo.com/en/o88d0509/build-a-search-ui/migrate-to-event-protocol
+        analyticsMode: "legacy",
+        // Query suggestions API also needs a matching `tab`. The tab is basically a category within
+        // our `/search` page. We use the default tab which includes all results.
+        // Here, we set `originLevel2` to `all` which Coveo internally provides as the `tab` filter
+        // in querySuggest API calls.
+        // https://docs.coveo.com/en/1459/build-a-search-ui/get-query-suggestions#troubleshooting
+        originLevel2: "all"
+      }
+    }
+  });
+  globalSearch.controller = headless.buildSearchBox(globalSearch.engine, {
+    options: {
+      highlightOptions: {
+        exactMatchDelimiters: {
+          open: "<strong>",
+          close: "</strong>"
+        }
+      }
+    }
+  });
+  globalSearch.controller.subscribe(() => {
+    const state2 = globalSearch.controller.state;
+    const { value, suggestions, isLoadingSuggestions } = state2;
+    if (value.length && isLoadingSuggestions === false && isLoadingSuggestions !== globalSearch.previousIsLoadingSuggestions) {
+      globalSearch.resolveSuggestions?.(suggestions);
+    }
+    globalSearch.previousIsLoadingSuggestions = isLoadingSuggestions;
+  });
+  globalSearch.isInitialized = true;
+}
+function onTriggerClickHandler(e) {
+  if (!globalSearch.initializePromise) {
+    globalSearch.initializePromise = initializeGlobalSearch();
+  }
+  e.preventDefault();
+  elements.globalHeader.classList.add("global-header--search-shown");
+  if (e.currentTarget.matches(".global-header__search-toggle")) {
+    setTimeout(() => {
+      if (elements.input) {
+        elements.input.focus();
+      }
+    }, 200);
+  }
+}
+function setupSearch() {
+  elements.triggers.forEach((triggerElement) => {
+    triggerElement.addEventListener("click", onTriggerClickHandler);
+  });
+  if (elements.closeButton) {
+    elements.closeButton.addEventListener("click", () => {
+      elements.globalHeader.classList.remove("global-header--search-shown");
+    });
+  }
+}
+var state = makeReadOnlyProxyOf(searchState);
+
+// statics/js/votd.js
+var votd_exports = {};
+__export(votd_exports, {
+  default: () => initialize4
+});
+var votdEmbed = document.querySelector(".votd-embed");
+var supportedLocales = ["en-us", "en-gb"];
+async function fetchVotd() {
+  return tabiaFetch("/api/votd/json", { label: "Drupal Viz of the Day" });
+}
+function renderVotd(votd) {
+  votdEmbed.innerHTML = // eslint-disable-line @stylistic/operator-linebreak
+  `<article class="card card__1 card__wrapper">
+      <div class="card--card_resource card--generic_card pbc-g-elevation-2 flex border-rad-16">
+        <div class="card__image__wrapper">
+          <a href="${votd[0].path}" tabindex="-1" aria-label="${votd[0].alt}" data-link-url="${votd[0].path}" data-link-type="image" target="_blank">
+            <img loading="lazy" class="card__image" alt="${votd[0].alt}" src="${votd[0].src}" />
+          </a>
+        </div>
+        <div class="card__content__wrapper">
+          <div class="card__copy__wrapper">
+            <h3 class="card__headline mb-16">
+              <a href="${votd[0].path}" data-link-text="${votd[0].title}" data-link-url="${votd[0].path}" data-link-type="header" target="_blank">
+                ${votd[0].title}
+              </a>
+            </h3>
+            <div class="card__description mt-16">${votd[0].description}</div>
+          </div>
+          <div class="cta_container flex flex--center">
+            <pbc-button class="cta_button__wrapper" data-link-text="Interact with the viz" data-link-url="${votd[0].path}" data-link-type="primary cta">
+              <a class="cta_button" data-variant="secondary" href="${votd[0].path}" target="_blank">
+                Interact with the viz
+              </a>
+            </pbc-button>
+          </div>
+        </div>
+      </div>
+    </article>`;
+}
+async function initialize4() {
+  if (!votdEmbed || votdEmbed?.dataset.type !== "votd" || supportedLocales.indexOf(window.sfdcBase.locale) === -1) {
+    return;
+  }
+  const votd = {
+    data: null
+  };
+  try {
+    [votd.data] = await Promise.all([
+      fetchVotd()
+    ]);
+  } catch {
+  }
+  debug("Loaded VOTD data.", {
+    type: "votd",
+    data: votd.data
+  });
+  renderVotd(votd.data);
+}
+
+// statics/js/marketing-attribution.js
+var marketing_attribution_exports = {};
+__export(marketing_attribution_exports, {
+  default: () => initialize5
+});
+function initialize5() {
+  if (typeof tableauEloquaAttribution === "undefined") {
+    error("Missing tableauEloquaAttribution.");
+    return;
+  }
+  tableauEloquaAttribution.init({
+    required: {
+      googleAnalyticsTrackerId: "UA-625217-46"
+    },
+    callbacks: {
+      languageCode: function() {
+        return document.querySelector("html").getAttribute("lang");
+      }
+    }
+  });
+}
+
+// src/app.js
+var appState = {
+  analytics: analytics_exports,
+  menu: menu_exports,
+  personalization: personalization_exports,
+  search: search_exports,
+  votd: votd_exports,
+  marketingAttribution: marketing_attribution_exports
+};
+initialize();
+initialize2();
+initialize3();
+setupSearch();
+initialize4();
+initialize5();
+window.appState = makeReadOnlyProxyOf(appState);

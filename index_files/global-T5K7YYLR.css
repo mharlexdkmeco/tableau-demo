@@ -1,0 +1,92 @@
+/* statics/css/header-footer-overrides.css */
+.global-header__myaccount-link {
+  padding-top: 0.8rem;
+}
+.hide-try-now .global-header__secondary-item:has(a[href*="/products/trial"]) {
+  display: none;
+}
+
+/* statics/css/personalization.css */
+.section-vary-link {
+  display: none;
+}
+.user-vary,
+.user-vary-link {
+  display: none;
+}
+[data-user-type=anonymous] .user-anonymous-show,
+[data-user-type=guest] .user-guest-show,
+[data-user-type=authenticated] .user-authenticated-show,
+[data-user-type=customer] .user-customer-show {
+  display: block;
+}
+[data-user-type=anonymous] .user-anonymous-show.global-header__secondary-link,
+[data-user-type=guest] .user-guest-show.global-header__secondary-link,
+[data-user-type=authenticated] .user-authenticated-show.global-header__secondary-link,
+[data-user-type=customer] .user-customer-show.global-header__secondary-link {
+  display: inline-block;
+}
+[data-user-type=anonymous] .user-anonymous-hide,
+[data-user-type=guest] .user-guest-hide,
+[data-user-type=authenticated] .user-authenticated-hide,
+[data-user-type=customer] .user-customer-hide {
+  display: none;
+}
+[data-section=academic] .section-academic-show {
+  display: inline-block;
+}
+[data-section=academic] .section-academic-hide {
+  display: none;
+}
+[data-is-pending-activation=true] .user-is-pending-activation-show {
+  display: block;
+}
+[data-is-pending-activation=true] .user-is-pending-activation-hide {
+  display: none;
+}
+[data-lytics-audience-show] {
+  display: none;
+}
+
+/* statics/css/search.css */
+@media (min-width: 1020px) {
+  .global-header__search-wrapper {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 320px;
+    pointer-events: none;
+  }
+  .global-header__search .global-header__search-input {
+    position: relative;
+  }
+  .global-header--search-shown .global-header__search-wrapper {
+    pointer-events: auto;
+  }
+}
+.global-header__search-results {
+  text-align: left;
+  font-size: 1rem;
+  line-height: 1.5em;
+}
+.autocomplete-result-list {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #aaa;
+  background: #fff;
+  list-style: none;
+  overflow-y: auto;
+}
+.autocomplete-result {
+  cursor: default;
+  padding: 1rem 1rem 1rem 2rem;
+}
+.autocomplete-result[aria-selected=true] {
+  background-color: #e6ecf0;
+}
+.autocomplete-result:hover {
+  background-color: #f0f0f0;
+}
+
+/* statics/css/global.css */
